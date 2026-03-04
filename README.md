@@ -1,9 +1,9 @@
-<<<<<<< HEAD
 # LOB Prediction Competition - Final Solution
 
 ## Competition Results
 
-**Final Score: 0.2744** (46x improvement from initial 0.006)
+**Final Score: 0.2812** (47x improvement from initial 0.006)
+**Final Rank: 120 out of 4917 participants (Top 2.4%)**
 
 ### Submissions Summary
 1. Tree models (batch approach) - 0.0064 ❌
@@ -11,7 +11,7 @@
 3. Tree models - TIMEOUT ❌
 4. Tree models - TIMEOUT ❌
 5. TimeMixer INT8 (single model) - **0.2685** ✅
-6. BiGRU + TimeMixer (2-model ensemble) - **0.2744** 🏆 BEST
+6. BiGRU + TimeMixer (2-model ensemble) - **0.2812** 🏆 BEST
 7. 2-model retry - TIMEOUT ❌
 
 ## Solution Overview
@@ -21,7 +21,7 @@
 - **TimeMixer** (75% weight): Multiscale MLP for seasonal/trend decomposition
 - **Quantization**: INT8 for 4x speedup
 - **Runtime**: 68 minutes (over limit but scored)
-- **Score**: 0.2744
+- **Score**: 0.2812
 
 ### Backup Solution: Single Model
 - **TimeMixer** INT8 only
@@ -104,7 +104,7 @@ Switched to sequence models:
 
 | Metric | Tree Models | Single Model | 2-Model Ensemble |
 |--------|-------------|--------------|------------------|
-| Score | 0.006 | 0.2685 | **0.2744** |
+| Score | 0.006 | 0.2685 | **0.2812** |
 | Runtime | Timeout | 15 min | 68 min |
 | Models | 17 (25 MB) | 1 (0.34 MB) | 2 (2.14 MB) |
 | Features | 128 (engineered) | 32 (raw) | 32 (raw) |
@@ -164,7 +164,7 @@ python quantize_models.py
 - **Total submissions**: 7
 - **Successful submissions**: 2 (0.2685, 0.2744)
 - **Failed submissions**: 5 (timeouts, low scores)
-- **Best improvement**: 46x (0.006 → 0.2744)
+- **Best improvement**: 47x (0.006 → 0.2812)
 - **Time spent**: 5 days (3 days on wrong approach, 2 days on correct approach)
 
 ## Future Improvements
@@ -183,11 +183,8 @@ Realistic ceiling: 0.30-0.33 with current approach
 **Competition**: LOB Prediction Challenge  
 **Date**: March 2, 2026  
 **Team**: VK224  
-**Final Score**: 0.2744 🏆  
+**Final Rank**: 120 out of 4917 participants (Top 2.4%)
+**Final Score**: 0.2812 🏆  
 **Status**: SUCCESS ✅
 
 For detailed technical information, see `reports/` folder.
-=======
-# -Vk224-Wunder-Challenge-LOB-Predictorium
-LOB Prediction Challenge: Rank 120/4917 (Top 2.4%) | Failed with 17 tree models (0.006), pivoted to BiGRU+TimeMixer ensemble with INT8 quantization (0.2812). Complete journey from batch processing mistake to streaming success. Includes models, training scripts, and detailed analysis.
->>>>>>> d4d2b5a27aa7e099895c215bb4ec71cecb955655
