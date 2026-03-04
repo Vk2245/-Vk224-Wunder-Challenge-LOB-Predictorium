@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # LOB Prediction Competition - Final Solution
 
 ## Competition Results
@@ -186,3 +187,7 @@ Realistic ceiling: 0.30-0.33 with current approach
 **Status**: SUCCESS ✅
 
 For detailed technical information, see `reports/` folder.
+=======
+# -Vk224-Wunder-Challenge-LOB-Predictorium
+LOB Prediction Challenge: Rank 120/4917 (Top 2.4%) | Failed with 17 tree models (0.006), pivoted to BiGRU+TimeMixer ensemble with INT8 quantization (0.2812). Complete journey from batch processing mistake to streaming success. Includes models, training scripts, and detailed analysis.
+>>>>>>> d4d2b5a27aa7e099895c215bb4ec71cecb955655
