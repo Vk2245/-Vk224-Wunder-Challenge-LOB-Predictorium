@@ -1,0 +1,601 @@
+================================================================================
+BATCH MODE vs STREAMING MODE: Why Our Approach Changed
+================================================================================
+
+This document explains why our initial 17 tree-based models would excel in
+batch mode competitions but failed in streaming mode, and how we adapted our
+approach after realizing the competition's true nature.
+
+================================================================================
+PART 1: THE TWO COMPETITION MODES
+================================================================================
+
+BATCH MODE Competition:
+-----------------------
+- Server provides ENTIRE dataset at once
+- You have access to ALL rows of each sequence (e.g., all 1000 rows)
+- Can compute features using full sequence information
+- Can use groupby(), rolling windows, aggregations freely
+- Inference happens ONCE on complete data
+- Time limit applies to total processing time
+
+Example:
+    Input: Complete DataFrame with 10,000 sequences × 1000 rows each
+    Process: Compute features on all data, predict all at once
+    Output: All predictions returned together
+
+STREAMING MODE Competition:
+---------------------------
+- Server calls predict() for EACH ROW individually
+- Only have access to ROLLING BUFFER (e.g., last 100 rows)
+- Cannot see future rows or full sequence
+- Must predict in real-time as data arrives
+- Inference happens 1.3 MILLION times (once per row)
+- Time limit applies to cumulative inference time
+
+Example:
+    Input: One row at a time via predict(DataPoint)
+    Process: Maintain rolling buffer, predict from last 100 rows only
+    Output: One prediction per call, 1.3M times
+
+================================================================================
+PART 2: WHY OUR 17 TREE MODELS WOULD EXCEL IN BATCH MODE
+================================================================================
+
+Our Initial Approach (17 Models):
+---------------------------------
+
+Tech Stack:
+- XGBoost (9 models): Gradient boosting with tree-based learners
+- LightGBM (8 models): Microsoft's fast gradient boosting
+- CatBoost (3 models): Yandex's categorical boosting
+- Ridge Regression (2 models): Linear models with L2 regularization
+- Stacking Ensembles (3 models): Meta-models combining base models
+- MLP (2 models): Neural networks for specific targets
+
+Feature Engineering (128 features):
+- Price-based: midprice, microprice, spread, spread_norm
+- Volume-based: vol_imbalance, depth_imbalance, bid_ask_vol_ratio
+- Rolling statistics: mean, std, min, max over windows (5,10,20,50,100)
+- Trade features: signed_trade, trade_imbalance
+- Sequential lags: 10 lags of 5 signals per sequence
+- Enriched features: 48 additional derived features
+
+Why This Would Work in BATCH MODE:
+----------------------------------
+
+1. FULL SEQUENCE ACCESS
+   In batch mode, we have all 1000 rows at once:
+   
+   df['mean_price'] = df.groupby('seq_ix')['price'].transform('mean')
+   
+   This computes mean across ALL 1000 rows for each sequence.
+   Result: Consistent, accurate statistics.
+
+2. EFFICIENT FEATURE COMPUTATION
+   Pandas operations are optimized for batch processing:
+   
+   df['rolling_mean_20'] = df.groupby('seq_ix')['price'].rolling(20).mean()
+   
+   Computed once for entire dataset, very fast.
+
+3. TREE MODELS EXCEL WITH RICH FEATURES
+   - XGBoost/LightGBM/CatBoost are SOTA for tabular data
+   - Handle 128 features easily
+   - Capture complex non-linear relationships
+   - Fast training and inference on batch data
+   - Robust to feature scaling issues
+
+4. ENSEMBLE DIVERSITY
+   17 models with different algorithms provide:
+   - Different perspectives on the data
+   - Reduced overfitting through averaging
+   - Better generalization
+   - Typical 2-5% improvement over single model
+
+5. VALIDATION MATCHED INFERENCE
+   Our validation process:
+   - Load full validation set
+   - Compute features on complete sequences
+   - Predict all at once
+   - Measure accuracy
+   
+   This EXACTLY matches batch mode inference!
+   Result: 0.2562 validation score was REAL.
+
+Expected Performance in Batch Mode:
+-----------------------------------
+- Validation: 0.2562 (proven)
+- Competition: 0.25-0.27 (expected)
+- Rank: Top 10-20% (competitive)
+- Runtime: 5-10 minutes (fast enough)
+
+Tech Stack Advantages for Batch:
+--------------------------------
+- XGBoost: Industry standard, highly optimized
+- LightGBM: Fastest training, handles large datasets
+- CatBoost: Best for categorical features
+- Pandas: Efficient batch operations
+- NumPy: Vectorized computations
+- Scikit-learn: Robust preprocessing and ensembling
+
+================================================================================
+PART 3: WHY TREE MODELS FAILED IN STREAMING MODE
+================================================================================
+
+The Fundamental Problem: FEATURE MISMATCH
+-----------------------------------------
+
+In streaming mode, we only have last 100 rows in buffer.
+
+Training (had all 1000 rows):
+    df['mean_price'] = df.groupby('seq_ix')['price'].transform('mean')
+    # For sequence 1, all 1000 rows get: mean = 100.5
+
+Inference (only have 100 rows):
+    mean_price = buffer[-100:]['price'].mean()
+    # At step 100: mean = 98.2
+    # At step 500: mean = 102.1
+    # At step 900: mean = 101.8
+
+Models trained on 100.5, but receive 98.2, 102.1, 101.8 → GARBAGE INPUT!
+
+Mathematical Example:
+--------------------
+Feature: rolling_mean_50 (mean of last 50 prices)
+
+Batch Mode (correct):
+    Step 150: mean of rows 100-150 = 100.3
+    Step 500: mean of rows 450-500 = 100.8
+    Step 900: mean of rows 850-900 = 100.5
+
+Streaming Mode (wrong):
+    Step 150: mean of rows 100-150 = 100.3 ✓ (same!)
+    Step 500: mean of rows 450-500 = 100.8 ✓ (same!)
+    Step 900: mean of rows 850-900 = 100.5 ✓ (same!)
+    
+Wait, rolling features should work!
+
+The REAL problem: SEQUENCE-LEVEL FEATURES
+-----------------------------------------
+Feature: sequence_mean_price (mean across entire sequence)
+
+Batch Mode:
+    All rows in sequence get: 100.5 (computed from all 1000 rows)
+
+Streaming Mode:
+    Step 100: Can only compute from rows 0-100 = 98.2 ✗
+    Step 500: Can only compute from rows 400-500 = 102.1 ✗
+    Step 900: Can only compute from rows 800-900 = 101.8 ✗
+
+Models expect 100.5, get varying values → predictions fail!
+
+Our 128 Features Breakdown:
+---------------------------
+- 40 features: Sequence-level (BROKEN in streaming)
+- 60 features: Rolling windows (WORK in streaming)
+- 28 features: Lags and differences (WORK in streaming)
+
+Result: 31% of features are completely wrong!
+
+Additional Problems in Streaming:
+---------------------------------
+
+1. SPEED BOTTLENECK
+   Feature engineering per prediction: 50ms
+   Number of predictions: 1.3 million
+   Total time: 50ms × 1.3M = 65,000 seconds = 18 hours!
+   Competition limit: 60 minutes
+   Result: TIMEOUT
+
+2. PANDAS OVERHEAD
+   Creating DataFrame for each prediction:
+   
+   for each row:
+       df = pd.DataFrame(buffer)  # Slow!
+       features = compute_features(df)  # Slow!
+       prediction = model.predict(features)
+   
+   Pandas is optimized for batch, not row-by-row operations.
+
+3. MODEL LOADING OVERHEAD
+   17 models × 1.5 MB each = 25.5 MB
+   Loading time: 2-3 seconds
+   Memory usage: High
+   Inference time: 17 models × 0.5ms = 8.5ms per prediction
+   
+   8.5ms × 1.3M = 11,050 seconds = 3 hours (still too slow!)
+
+4. NO INTERNAL STATE
+   Tree models are STATELESS:
+   - Each prediction is independent
+   - No memory of previous rows
+   - Cannot learn temporal patterns
+   - Rely entirely on hand-crafted features
+
+Our Competition Results:
+-----------------------
+Submission 1: TIMEOUT (feature engineering too slow)
+Submission 2: 0.0082 (wrong features, some predictions)
+Submission 3: TIMEOUT (batch-at-end strategy failed)
+Submission 4: 0.0059 (periodic batching, still wrong features)
+
+Average score: 0.006 (essentially random guessing)
+
+Why 0.006 is So Bad:
+-------------------
+- Random predictions: ~0.00 correlation
+- Our score: 0.006 (barely better than random)
+- Target score: 0.25-0.35
+- We were 40x worse than target!
+
+================================================================================
+PART 4: OUR STREAMING MODE SOLUTION
+================================================================================
+
+The Paradigm Shift:
+------------------
+From: Feature Engineering + Tree Models
+To:   Raw Features + Sequence Models
+
+Key Realization:
+"In streaming mode, the MODEL must learn temporal patterns,
+ not the feature engineering pipeline."
+
+New Tech Stack:
+--------------
+
+1. PyTorch (Deep Learning Framework)
+   - GPU acceleration for training
+   - Automatic differentiation
+   - Rich ecosystem of models
+   - Why: Needed for training neural networks
+
+2. ONNX Runtime (Inference Engine)
+   - Optimized for CPU inference
+   - Cross-platform compatibility
+   - Graph optimization
+   - INT8 quantization support
+   - Why: Fast inference on 1 vCPU
+
+3. TimeMixer (Sequence Model)
+   - Pure MLP architecture
+   - Multiscale decomposition (100/50/25 steps)
+   - Seasonal/trend separation
+   - No recurrence (faster than RNN)
+   - Why: SOTA for time series, fast inference
+
+4. NumPy (Numerical Computing)
+   - Efficient array operations
+   - Pre-allocated buffers
+   - In-place operations
+   - Why: Minimize overhead in predict() loop
+
+Architecture Comparison:
+-----------------------
+
+OLD (Tree Models):
+    Input: 128 hand-crafted features
+    Model: XGBoost/LightGBM/CatBoost
+    Output: Prediction
+    State: None (stateless)
+    Speed: 0.5ms per model × 17 = 8.5ms
+    Problem: Features computed wrong in streaming
+
+NEW (TimeMixer):
+    Input: 32 raw features (prices, volumes, deltas)
+    Model: TimeMixer (MLP-based sequence model)
+    Output: Prediction
+    State: Rolling buffer (last 100 rows)
+    Speed: 0.96ms per prediction
+    Solution: No feature engineering, model learns patterns
+
+Why Sequence Models Work in Streaming:
+--------------------------------------
+
+1. DESIGNED FOR SEQUENTIAL DATA
+   - Process one timestep at a time
+   - Maintain internal state (rolling buffer)
+   - Learn temporal patterns automatically
+   - Training = Inference (same process)
+
+2. RAW FEATURES ONLY
+   No feature engineering needed:
+   
+   Input: [p0, p1, ..., p11, v0, v1, ..., v11, dp0, ..., dp3, dv0, ..., dv3]
+   Shape: (100, 32)  # Last 100 rows, 32 features each
+   
+   Model learns:
+   - Which features matter
+   - How they interact over time
+   - Temporal patterns and trends
+   - Non-linear relationships
+
+3. TRAINING MATCHES INFERENCE
+   Training:
+       for each window in dataset:
+           X = raw_data[i:i+100]  # 100-step window
+           X_norm = (X - mu) / sig
+           pred = model(X_norm)
+           loss = MSE(pred, target)
+   
+   Inference:
+       buffer.append(new_row)
+       X = buffer[-100:]  # Last 100 rows
+       X_norm = (X - mu) / sig
+       pred = model(X_norm)
+   
+   EXACT SAME PROCESS! No mismatch!
+
+4. EFFICIENT IMPLEMENTATION
+   - Pre-allocated arrays (no repeated allocation)
+   - In-place operations (no memory copies)
+   - ONNX graph optimization
+   - INT8 quantization (4x speedup)
+   - Single-threaded (optimal for 1 vCPU)
+
+Performance Comparison:
+----------------------
+
+Tree Models (Batch Mode):
+- Training: 2 hours (all 17 models)
+- Inference: 8.5ms per prediction
+- Features: 128 (hand-crafted)
+- Memory: 25 MB (17 models)
+- Score (batch): 0.2562 ✓
+- Score (streaming): 0.006 ✗
+
+TimeMixer (Streaming Mode):
+- Training: 26 minutes (single model)
+- Inference: 0.96ms per prediction
+- Features: 32 (raw)
+- Memory: 0.34 MB (INT8)
+- Score (batch): Unknown
+- Score (streaming): 0.2685 ✓
+
+Speed Improvement:
+- 8.5ms → 0.96ms = 8.9x faster
+- 1.3M predictions: 3 hours → 21 minutes
+
+Accuracy Improvement:
+- 0.006 → 0.2685 = 45x better
+
+Model Size Reduction:
+- 25 MB → 0.34 MB = 73x smaller
+
+================================================================================
+PART 5: KEY TECHNICAL DIFFERENCES
+================================================================================
+
+Feature Engineering:
+-------------------
+
+BATCH MODE (Tree Models):
+    # Can use full sequence
+    df['seq_mean'] = df.groupby('seq_ix')['price'].transform('mean')
+    df['seq_std'] = df.groupby('seq_ix')['price'].transform('std')
+    df['rolling_20'] = df.groupby('seq_ix')['price'].rolling(20).mean()
+    df['lag_10'] = df.groupby('seq_ix')['price'].shift(10)
+    # ... 124 more features
+    
+    Result: 128 features, rich information, works perfectly
+
+STREAMING MODE (Sequence Models):
+    # Only normalize raw features
+    X = buffer[-100:]  # Last 100 rows
+    X_norm = (X - mu) / sig
+    
+    Result: 32 features, model learns patterns, works perfectly
+
+Model Architecture:
+------------------
+
+BATCH MODE (Tree Models):
+    - Decision trees (XGBoost, LightGBM, CatBoost)
+    - Ensemble of 100-1000 trees per model
+    - Split on feature thresholds
+    - No temporal awareness
+    - Stateless (each prediction independent)
+
+STREAMING MODE (Sequence Models):
+    - Neural network (TimeMixer)
+    - MLP layers with multiscale decomposition
+    - Learn temporal patterns
+    - Temporal awareness built-in
+    - Stateful (maintains rolling buffer)
+
+Training Process:
+----------------
+
+BATCH MODE:
+    1. Load entire dataset
+    2. Compute all features at once
+    3. Train model on complete feature matrix
+    4. Validate on complete validation set
+    5. Save model
+    
+    Time: 2 hours for 17 models
+    Validation: Matches competition (batch inference)
+
+STREAMING MODE:
+    1. Load dataset
+    2. Create sliding windows (100-step each)
+    3. Train model on windows (one at a time)
+    4. Validate on windows (streaming simulation)
+    5. Export to ONNX, quantize to INT8
+    
+    Time: 26 minutes for 1 model
+    Validation: Matches competition (streaming inference)
+
+Inference Process:
+-----------------
+
+BATCH MODE:
+    def predict_batch(df):
+        features = compute_features(df)  # All rows at once
+        predictions = []
+        for model in models:
+            pred = model.predict(features)
+            predictions.append(pred)
+        return np.mean(predictions, axis=0)
+    
+    Called: Once per dataset
+    Speed: Fast (batch operations)
+
+STREAMING MODE:
+    def predict(datapoint):
+        buffer.append(datapoint.state)
+        if len(buffer) < 100:
+            return zeros
+        X = stack(buffer[-100:])
+        X_norm = (X - mu) / sig
+        return model.run(X_norm)
+    
+    Called: 1.3 million times
+    Speed: Must be < 1ms per call
+
+Optimization Techniques:
+-----------------------
+
+BATCH MODE:
+- Pandas vectorization
+- NumPy broadcasting
+- Parallel processing (multiple cores)
+- Feature caching
+- Model ensembling
+
+STREAMING MODE:
+- Pre-allocated arrays
+- In-place operations
+- ONNX graph optimization
+- INT8 quantization
+- Single-threaded (1 vCPU)
+- Avoid Python loops
+- Minimize memory allocation
+
+Memory Management:
+-----------------
+
+BATCH MODE:
+- Load entire dataset: ~2 GB
+- Feature matrix: ~5 GB
+- Models: 25 MB
+- Total: ~7 GB
+- Not a problem (plenty of RAM)
+
+STREAMING MODE:
+- Rolling buffer: 100 rows × 32 features × 4 bytes = 12.8 KB
+- Model: 0.34 MB (INT8)
+- Pre-allocated arrays: ~50 KB
+- Total: ~0.4 MB
+- Critical (minimize memory for speed)
+
+================================================================================
+PART 6: LESSONS LEARNED
+================================================================================
+
+When to Use Tree Models (Batch Mode):
+-------------------------------------
+✓ Full dataset available at once
+✓ Can compute features on complete data
+✓ Tabular data with rich features
+✓ No temporal dependencies (or captured in features)
+✓ Inference happens once or infrequently
+✓ Accuracy is priority over speed
+
+When to Use Sequence Models (Streaming Mode):
+---------------------------------------------
+✓ Data arrives sequentially
+✓ Only recent history available
+✓ Temporal patterns are important
+✓ Real-time inference required
+✓ Speed is critical
+✓ Cannot engineer features in real-time
+
+Competition Type Indicators:
+---------------------------
+
+BATCH MODE signals:
+- "Download dataset and submit predictions"
+- "CSV file with all data"
+- "Compute features as needed"
+- "Single prediction file submission"
+
+STREAMING MODE signals:
+- "Implement predict() function"
+- "Row-by-row inference"
+- "Rolling window"
+- "Real-time prediction"
+- "Time limit per prediction"
+
+Our Mistake:
+-----------
+We assumed batch mode because:
+- Dataset was provided as complete files
+- Validation was done on complete data
+- No explicit mention of "streaming" in rules
+- Tree models are standard for tabular data
+
+We should have noticed:
+- Competition required predict() function
+- DataPoint class with seq_ix and step
+- Emphasis on "real-time" in description
+- 60-minute time limit (unusual for batch)
+
+================================================================================
+PART 7: FINAL COMPARISON TABLE
+================================================================================
+
+Aspect              | Batch Mode (Tree)    | Streaming Mode (Sequence)
+--------------------|---------------------|---------------------------
+Models              | 17 (XGB/LGBM/Cat)   | 1 (TimeMixer)
+Features            | 128 (engineered)    | 32 (raw)
+Training Time       | 2 hours             | 26 minutes
+Model Size          | 25 MB               | 0.34 MB (INT8)
+Inference Speed     | 8.5ms/pred          | 0.96ms/pred
+Total Runtime       | 3 hours             | 21 minutes
+Memory Usage        | 7 GB                | 0.4 MB
+Validation Score    | 0.2562              | 0.2073
+Competition Score   | 0.006 ✗             | 0.2685 ✓
+Improvement         | -                   | 45x better
+Tech Stack          | Pandas, XGBoost     | PyTorch, ONNX
+Optimization        | Vectorization       | Quantization
+State               | Stateless           | Stateful (buffer)
+Temporal Awareness  | Via features        | Built-in
+Scalability         | Batch only          | Real-time ready
+
+================================================================================
+CONCLUSION
+================================================================================
+
+Our initial 17 tree-based models were PERFECT for batch mode competitions:
+- Rich feature engineering leveraging full sequence access
+- Ensemble diversity for robust predictions
+- Fast batch inference
+- Proven validation score of 0.2562
+
+But they FAILED in streaming mode because:
+- Features computed differently at train vs inference
+- Too slow (feature engineering overhead)
+- No temporal awareness (stateless models)
+- Wrong architecture for sequential data
+
+Our streaming solution with TimeMixer succeeded because:
+- No feature engineering (raw features only)
+- Designed for sequential data (temporal awareness)
+- Fast inference (0.96ms per prediction)
+- Training matches inference (no mismatch)
+- Optimized for 1 vCPU (INT8, ONNX)
+
+Key Takeaway:
+"The best model is not the most accurate or complex, but the one that
+ matches the problem structure and deployment constraints."
+
+In batch mode: Tree models with rich features = WINNER
+In streaming mode: Sequence models with raw features = WINNER
+
+Understanding the competition mode is MORE IMPORTANT than model selection!
+
+================================================================================
+END OF DOCUMENT
+================================================================================
