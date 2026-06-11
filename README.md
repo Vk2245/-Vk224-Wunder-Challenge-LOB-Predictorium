@@ -235,12 +235,12 @@ At each timestep t:
 
 | Model | corr_t0 | corr_t1 | Overall | Parameters | Status |
 |-------|---------|---------|---------|------------|--------|
-| **MS-TCN (Local)** | **0.3159** | **0.0965** | **0.2126** | ~350K | ✅ Success |
-| Sparse MoE (Cloud) | 0.1444 | 0.0084 | 0.1642 | ~400K | ✅ Trained |
-| xLSTM | - | - | NaN | ~280K | ❌ Unstable |
-| TTT-Linear | - | - | NaN | ~175K | ❌ OOM |
-| Transformer (CPU) | - | - | Pending | ~540K | ⏳ Ready |
-| BiGRU (CPU) | - | - | Pending | ~120K | ⏳ Ready |
+| **MS-TCN (Local)** | **0.3159** | **0.0965** | **0.2126** | ~350K | Success |
+| Sparse MoE (Cloud) | 0.1444 | 0.0084 | 0.1642 | ~400K | Trained |
+| xLSTM | - | - | NaN | ~280K | Unstable |
+| TTT-Linear | - | - | NaN | ~175K | OOM |
+| Transformer (CPU) | - | - | Pending | ~540K | Ready |
+| BiGRU (CPU) | - | - | Pending | ~120K | Ready |
 
 **Best Model**: MS-TCN with 0.2126 correlation (75.6% of competition baseline 0.2812)
 
@@ -456,13 +456,13 @@ Accuracy Loss: <1%
 ```
 Architecture Stability Assessment
 
-✅ MS-TCN:       Stable, converged successfully
-✅ Sparse MoE:   Stable, weak performance
-✅ BiGRU:        Stable with SSL pretraining
-✅ TimeMixer:    Stable, good performance
-⚠️  Transformer: Stable but computationally expensive
-❌ xLSTM:        NaN loss despite stabilization
-❌ TTT-Linear:   Out of memory, NaN loss
+[SUCCESS] MS-TCN:       Stable, converged successfully
+[SUCCESS] Sparse MoE:   Stable, weak performance
+[SUCCESS] BiGRU:        Stable with SSL pretraining
+[SUCCESS] TimeMixer:    Stable, good performance
+[WARNING] Transformer:  Stable but computationally expensive
+[FAILED]  xLSTM:        NaN loss despite stabilization
+[FAILED]  TTT-Linear:   Out of memory, NaN loss
 ```
 
 ---
