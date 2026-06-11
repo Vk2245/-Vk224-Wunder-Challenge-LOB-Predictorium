@@ -701,8 +701,13 @@ This project is available under the MIT License. See LICENSE file for details.
 ## Contact
 
 **Vishal Kumar**  
+Email: vk224official@gmail.com  
 GitHub: [@Vk2245](https://github.com/Vk2245)  
-Email: [vk224@example.com]
+Portfolio: [vk224portfolio.vercel.app](https://vk224portfolio.vercel.app/)  
+LinkedIn: [linkedin.com/in/vishal-kumar-7a74462a0](https://www.linkedin.com/in/vishal-kumar-7a74462a0/)  
+Kaggle: [@vk2245](https://www.kaggle.com/vk2245)  
+Google Developer: [g.dev/vk224](https://g.dev/vk224)  
+Resume: [View Resume](https://drive.google.com/file/d/18nXReC6hM3ZhpZKwhP3OG7C21qGPzNhn/view?usp=drive_link)
 
 For questions, issues, or collaboration opportunities, please open an issue on GitHub or contact via email.
 
