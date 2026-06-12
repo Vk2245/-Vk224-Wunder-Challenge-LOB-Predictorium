@@ -1,0 +1,26 @@
+# v2 Pipeline Requirements
+# Install with: pip install -r v2/requirements.txt
+
+# ── Data Layer (Tech Stack §1) ──
+polars>=1.0.0          # Rust-core DataFrame — 3-10x faster than pandas
+# pandas is still needed as fallback / sklearn compat
+
+# ── Model Optimisation (Tech Stack §5) ──
+onnx>=1.16.0
+onnxruntime>=1.19.0
+# onnxruntime-gpu>=1.19.0   # Uncomment for GPU inference
+
+# ── HPO (Tech Stack §6D) ──
+optuna>=3.6.0          # TPE + CMA-ES samplers, MedianPruner
+
+# ── Experiment Tracking (Tech Stack §6E) ──
+mlflow>=2.16.0         # Params, metrics, model registry
+
+# ── Core (already in your venv) ──
+# torch>=2.0.0
+# numpy>=1.24.0
+# pandas>=2.0.0
+# scipy>=1.11.0
+
+# ── Utilities ──
+tqdm>=4.66.0

@@ -102,6 +102,9 @@ runs/
 tensorboard/
 wandb/
 mlruns/
+_mlruns/
+training_log.txt
+training_*.txt
 
 # Checkpoints directories
 **/checkpoints/
